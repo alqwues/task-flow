@@ -19,7 +19,10 @@ export function RegisterForm({ onSwitch }: Props) {
       await authService.signUp(values.email, values.password, values.name);
       setDone(true);
     } catch (err: any) {
-      form.setFields([{ name: 'email', errors: [err.message ?? 'Registration failed'] }]);
+      const msg = err.status === 429
+        ? 'Too many attempts. Please wait a few minutes and try again.'
+        : (err.message ?? 'Registration failed');
+      form.setFields([{ name: 'email', errors: [msg] }]);
     } finally {
       setLoading(false);
     }
