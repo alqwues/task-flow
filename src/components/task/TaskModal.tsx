@@ -65,6 +65,7 @@ export function TaskModal() {
   }));
 
   const onSave = async () => {
+    if (!activeTask) return;
     const values = await form.validateFields();
     setSaving(true);
     await saveTask(activeTask.id, {
