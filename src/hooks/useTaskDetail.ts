@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { App } from 'antd';
 import { tasksService } from '../services/tasks';
+import { activityLogService } from '../services/activityLog';
 import { useTaskStore } from '../store/taskStore';
 import { useBoardStore } from '../store/boardStore';
 import { useAuthStore } from '../store/authStore';
@@ -10,7 +11,7 @@ export function useTaskDetail() {
   const { message } = App.useApp();
   const { activeTask, comments, commentsLoading, setActiveTask, updateActiveTask, setComments, addComment, removeComment, setCommentsLoading } =
     useTaskStore();
-  const { updateTask } = useBoardStore();
+  const { updateTask, currentBoard } = useBoardStore();
   const user = useAuthStore((s) => s.user);
 
   const openTask = useCallback(
@@ -38,11 +39,16 @@ export function useTaskDetail() {
         updateTask(taskId, updates);
         updateActiveTask(updates);
         message.success('Task updated');
+        if (currentBoard && user) {
+          activityLogService.log(currentBoard.id, user.id, 'task_updated', {
+            task_title: updates.title ?? activeTask?.title ?? undefined,
+          }).catch(() => {});
+        }
       } catch {
         message.error('Failed to update task');
       }
     },
-    [updateTask, updateActiveTask, message]
+    [updateTask, updateActiveTask, message, currentBoard, user, activeTask]
   );
 
   const postComment = useCallback(

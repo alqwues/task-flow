@@ -184,8 +184,9 @@ export function useBoardData(boardId: string) {
             to_column: col?.title,
           }).catch(() => {});
         }
-      } catch {
+      } catch (err) {
         message.error('Failed to move task');
+        throw err;
       }
     },
     [moveTaskInStore, message, boardId, user]

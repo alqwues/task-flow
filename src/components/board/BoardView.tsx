@@ -107,6 +107,7 @@ export function BoardView({ boardId }: Props) {
     if (!targetColumn) return;
 
     const columnTasks = getColumnTasks(targetColumnId);
+    const snapshot = tasks;
 
     if (task.column_id === targetColumnId) {
       const oldIndex = columnTasks.findIndex((t) => t.id === taskId);
@@ -116,7 +117,8 @@ export function BoardView({ boardId }: Props) {
       const updated = reordered.map((t, i) => ({ ...t, position: i }));
       const newTasks = tasks.map((t) => updated.find((u) => u.id === t.id) ?? t);
       setTasks(newTasks);
-      updated.forEach((t) => moveTask(t.id, t.column_id, t.position));
+      void Promise.all(updated.map((t) => moveTask(t.id, t.column_id, t.position)))
+        .catch(() => setTasks(snapshot));
     } else {
       const insertAt = overTask
         ? columnTasks.findIndex((t) => t.id === overId)
@@ -136,7 +138,8 @@ export function BoardView({ boardId }: Props) {
         (t) => t.column_id !== task.column_id && t.column_id !== targetColumnId
       );
       setTasks([...otherTasks, ...sourceTasks, ...targetTasks]);
-      [...sourceTasks, ...targetTasks].forEach((t) => moveTask(t.id, t.column_id, t.position));
+      void Promise.all([...sourceTasks, ...targetTasks].map((t) => moveTask(t.id, t.column_id, t.position)))
+        .catch(() => setTasks(snapshot));
     }
   };
 

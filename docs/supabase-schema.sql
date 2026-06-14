@@ -274,6 +274,7 @@ create policy "Task file delete"
   on storage.objects for delete
   using (bucket_id = 'task-files' and auth.uid() is not null);
 
+-- Require auth to read task files (bucket set to private)
 create policy "Task file read"
   on storage.objects for select
-  using (bucket_id = 'task-files');
+  using (bucket_id = 'task-files' and auth.uid() is not null);
