@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Form, Input, Button, Typography, Divider } from 'antd';
+import { Form, Input, Button, Typography, Divider, App } from 'antd';
+import { RiGoogleLine } from 'react-icons/ri';
 import { authService } from '../../services/auth';
 
 const { Title, Text } = Typography;
@@ -10,14 +11,28 @@ interface Props {
 
 export function LoginForm({ onSwitch }: Props) {
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [form] = Form.useForm();
+  const { message } = App.useApp();
+
+  const onGoogleSignIn = async () => {
+    setGoogleLoading(true);
+    try {
+      await authService.signInWithGoogle();
+    } catch {
+      message.error('Google sign-in is not configured. Enable it in the Supabase dashboard.');
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
 
   const onFinish = async (values: { email: string; password: string }) => {
     setLoading(true);
     try {
       await authService.signIn(values.email, values.password);
-    } catch (err: any) {
-      form.setFields([{ name: 'password', errors: [err.message ?? 'Sign in failed'] }]);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Sign in failed';
+      form.setFields([{ name: 'password', errors: [msg] }]);
     } finally {
       setLoading(false);
     }
@@ -53,7 +68,16 @@ export function LoginForm({ onSwitch }: Props) {
         </Form.Item>
       </Form>
 
-      <Divider />
+      <Divider plain>or</Divider>
+      <Button
+        block
+        icon={<RiGoogleLine />}
+        onClick={onGoogleSignIn}
+        loading={googleLoading}
+        style={{ marginBottom: 16 }}
+      >
+        Continue with Google
+      </Button>
       <Text type="secondary">
         No account?{' '}
         <Button type="link" onClick={onSwitch} style={{ padding: 0 }}>

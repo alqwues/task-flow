@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect } from 'react';
 import { App } from 'antd';
 import { boardsService } from '../services/boards';
 import { tasksService } from '../services/tasks';
+import { activityLogService } from '../services/activityLog';
 import { useBoardStore } from '../store/boardStore';
 import { useAuthStore } from '../store/authStore';
 import { supabase } from '../services/supabase';
@@ -19,15 +20,11 @@ export function useBoardData(boardId: string) {
     updateColumn: updateColumnInStore,
     removeColumn,
     addTask,
-    updateTask,
     removeTask,
     moveTask: moveTaskInStore,
     setLoading,
   } = useBoardStore();
   const user = useAuthStore((s) => s.user);
-
-  const columnsRef = useRef(columns);
-  useEffect(() => { columnsRef.current = columns; }, [columns]);
 
   const fetchBoardData = useCallback(async () => {
     setLoading(true);
@@ -42,32 +39,40 @@ export function useBoardData(boardId: string) {
     } finally {
       setLoading(false);
     }
-  }, [boardId, setColumns, setTasks, setLoading]);
+  }, [boardId, setColumns, setTasks, setLoading, message]);
 
+  // Realtime — use getState() to avoid stale closures and dedup local mutations
   useEffect(() => {
     const channel = supabase
       .channel(`board:${boardId}`)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'columns', filter: `board_id=eq.${boardId}` },
-        ({ new: col }) => addColumn(col as Column)
+        ({ new: col }) => {
+          const store = useBoardStore.getState();
+          if (!store.columns.some((c) => c.id === col.id)) store.addColumn(col as Column);
+        }
       )
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'columns', filter: `board_id=eq.${boardId}` },
-        ({ new: col }) => updateColumnInStore(col.id, (col as Column).title)
+        ({ new: col }) => useBoardStore.getState().updateColumn(col.id, (col as Column).title)
       )
       .on(
         'postgres_changes',
         { event: 'DELETE', schema: 'public', table: 'columns', filter: `board_id=eq.${boardId}` },
-        ({ old: col }) => removeColumn(col.id as string)
+        ({ old: col }) => useBoardStore.getState().removeColumn(col.id as string)
       )
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'tasks' },
         ({ new: task }) => {
-          if (columnsRef.current.some((c) => c.id === task.column_id)) {
-            addTask(task as Task);
+          const store = useBoardStore.getState();
+          if (
+            !store.tasks.some((t) => t.id === task.id) &&
+            store.columns.some((c) => c.id === task.column_id)
+          ) {
+            store.addTask(task as Task);
           }
         }
       )
@@ -75,15 +80,16 @@ export function useBoardData(boardId: string) {
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'tasks' },
         ({ new: task }) => {
-          if (columnsRef.current.some((c) => c.id === task.column_id)) {
-            updateTask(task.id, task as Partial<Task>);
+          const store = useBoardStore.getState();
+          if (store.columns.some((c) => c.id === task.column_id)) {
+            store.updateTask(task.id, task as Partial<Task>);
           }
         }
       )
       .on(
         'postgres_changes',
         { event: 'DELETE', schema: 'public', table: 'tasks' },
-        ({ old: task }) => removeTask(task.id as string)
+        ({ old: task }) => useBoardStore.getState().removeTask(task.id as string)
       )
       .subscribe();
 
@@ -100,7 +106,7 @@ export function useBoardData(boardId: string) {
         message.error('Failed to create column');
       }
     },
-    [boardId, columns.length, addColumn]
+    [boardId, columns.length, addColumn, message]
   );
 
   const renameColumn = useCallback(
@@ -112,7 +118,7 @@ export function useBoardData(boardId: string) {
         message.error('Failed to rename column');
       }
     },
-    [updateColumnInStore]
+    [updateColumnInStore, message]
   );
 
   const deleteColumn = useCallback(
@@ -124,7 +130,7 @@ export function useBoardData(boardId: string) {
         message.error('Failed to delete column');
       }
     },
-    [removeColumn]
+    [removeColumn, message]
   );
 
   const createTask = useCallback(
@@ -133,35 +139,56 @@ export function useBoardData(boardId: string) {
       try {
         const task = await tasksService.createTask(columnId, title, user.id);
         addTask(task);
+        const col = useBoardStore.getState().columns.find((c) => c.id === columnId);
+        activityLogService.log(boardId, user.id, 'task_created', {
+          task_title: task.title,
+          column: col?.title,
+        }).catch(() => {});
       } catch {
         message.error('Failed to create task');
       }
     },
-    [user, addTask]
+    [user, addTask, message, boardId]
   );
 
   const deleteTask = useCallback(
     async (taskId: string) => {
+      const taskToDelete = useBoardStore.getState().tasks.find((t) => t.id === taskId);
       try {
         await tasksService.deleteTask(taskId);
         removeTask(taskId);
+        if (taskToDelete && user) {
+          activityLogService.log(boardId, user.id, 'task_deleted', {
+            task_title: taskToDelete.title,
+          }).catch(() => {});
+        }
       } catch {
         message.error('Failed to delete task');
       }
     },
-    [removeTask]
+    [removeTask, message, boardId, user]
   );
 
   const moveTask = useCallback(
     async (taskId: string, columnId: string, position: number) => {
+      const store = useBoardStore.getState();
+      const existingTask = store.tasks.find((t) => t.id === taskId);
+      const isColumnChange = existingTask && existingTask.column_id !== columnId;
       moveTaskInStore(taskId, columnId, position);
       try {
         await tasksService.moveTask(taskId, columnId, position);
+        if (isColumnChange && user) {
+          const col = useBoardStore.getState().columns.find((c) => c.id === columnId);
+          activityLogService.log(boardId, user.id, 'task_moved', {
+            task_title: existingTask.title,
+            to_column: col?.title,
+          }).catch(() => {});
+        }
       } catch {
         message.error('Failed to move task');
       }
     },
-    [moveTaskInStore]
+    [moveTaskInStore, message, boardId, user]
   );
 
   return {

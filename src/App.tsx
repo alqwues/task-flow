@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { App as AntApp, ConfigProvider } from 'antd';
+import { App as AntApp, ConfigProvider, theme } from 'antd';
+import { useThemeStore } from './store/themeStore';
 import { supabase } from './services/supabase';
 import { useAuthStore } from './store/authStore';
 import { PageLoader } from './components/shared/PageLoader';
@@ -18,6 +19,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   const { session, loading, setSession, setLoading } = useAuthStore();
+  const { isDark } = useThemeStore();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -35,7 +37,10 @@ export default function App() {
   if (loading) return <PageLoader />;
 
   return (
-    <ConfigProvider theme={{ token: { colorPrimary: '#1677ff', borderRadius: 6 } }}>
+    <ConfigProvider theme={{
+      token: { colorPrimary: '#1677ff', borderRadius: 6 },
+      algorithm: isDark ? theme.darkAlgorithm : theme.defaultAlgorithm,
+    }}>
       <AntApp>
       <BrowserRouter>
         <Routes>

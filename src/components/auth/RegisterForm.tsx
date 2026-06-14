@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Form, Input, Button, Typography, Divider, Alert } from 'antd';
+import { Form, Input, Button, Typography, Divider, Alert, App } from 'antd';
+import { RiGoogleLine } from 'react-icons/ri';
 import { authService } from '../../services/auth';
 
 const { Title, Text } = Typography;
@@ -10,18 +11,32 @@ interface Props {
 
 export function RegisterForm({ onSwitch }: Props) {
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [done, setDone] = useState(false);
   const [form] = Form.useForm();
+  const { message } = App.useApp();
+
+  const onGoogleSignIn = async () => {
+    setGoogleLoading(true);
+    try {
+      await authService.signInWithGoogle();
+    } catch {
+      message.error('Google sign-in is not configured. Enable it in the Supabase dashboard.');
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
 
   const onFinish = async (values: { name: string; email: string; password: string }) => {
     setLoading(true);
     try {
       await authService.signUp(values.email, values.password, values.name);
       setDone(true);
-    } catch (err: any) {
-      const msg = err.status === 429
+    } catch (err) {
+      const status = (err as { status?: number }).status;
+      const msg = status === 429
         ? 'Too many attempts. Please wait a few minutes and try again.'
-        : (err.message ?? 'Registration failed');
+        : (err instanceof Error ? err.message : 'Registration failed');
       form.setFields([{ name: 'email', errors: [msg] }]);
     } finally {
       setLoading(false);
@@ -77,7 +92,16 @@ export function RegisterForm({ onSwitch }: Props) {
         </Form.Item>
       </Form>
 
-      <Divider />
+      <Divider plain>or</Divider>
+      <Button
+        block
+        icon={<RiGoogleLine />}
+        onClick={onGoogleSignIn}
+        loading={googleLoading}
+        style={{ marginBottom: 16 }}
+      >
+        Continue with Google
+      </Button>
       <Text type="secondary">
         Have an account?{' '}
         <Button type="link" onClick={onSwitch} style={{ padding: 0 }}>

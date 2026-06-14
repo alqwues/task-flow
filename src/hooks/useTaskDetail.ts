@@ -26,7 +26,7 @@ export function useTaskDetail() {
         setCommentsLoading(false);
       }
     },
-    [setActiveTask, setComments, setCommentsLoading]
+    [setActiveTask, setComments, setCommentsLoading, message]
   );
 
   const closeTask = useCallback(() => setActiveTask(null), [setActiveTask]);
@@ -42,7 +42,7 @@ export function useTaskDetail() {
         message.error('Failed to update task');
       }
     },
-    [activeTask, updateTask, setActiveTask]
+    [updateTask, updateActiveTask, message]
   );
 
   const postComment = useCallback(
@@ -55,7 +55,7 @@ export function useTaskDetail() {
         message.error('Failed to add comment');
       }
     },
-    [user, activeTask, addComment]
+    [user, activeTask, addComment, message]
   );
 
   const deleteComment = useCallback(
@@ -67,7 +67,7 @@ export function useTaskDetail() {
         message.error('Failed to delete comment');
       }
     },
-    [removeComment]
+    [removeComment, message]
   );
 
   return {

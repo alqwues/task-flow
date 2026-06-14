@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { Flex, Button, Input, Skeleton, Select } from 'antd';
+import { Flex, Button, Input, Skeleton, Select, Checkbox, theme } from 'antd';
 import {
   DndContext,
   DragOverlay,
@@ -17,7 +17,9 @@ import { TaskModal } from '../task/TaskModal';
 import { useBoardData } from '../../hooks/useBoardData';
 import { useTaskDetail } from '../../hooks/useTaskDetail';
 import { useBoardStore } from '../../store/boardStore';
-import type { Priority, Task } from '../../types';
+import { boardsService } from '../../services/boards';
+import { filterTasks } from '../../utils/filterTasks';
+import type { Priority, Task, BoardMember } from '../../types';
 
 interface Props {
   boardId: string;
@@ -35,12 +37,16 @@ export function BoardView({ boardId }: Props) {
     useBoardData(boardId);
   const { openTask } = useTaskDetail();
   const { setTasks } = useBoardStore();
+  const { token } = theme.useToken();
 
   const [addingColumn, setAddingColumn] = useState(false);
   const [newColumnTitle, setNewColumnTitle] = useState('');
   const [draggingTask, setDraggingTask] = useState<Task | null>(null);
   const [search, setSearch] = useState('');
   const [priorityFilter, setPriorityFilter] = useState<Priority | ''>('');
+  const [assigneeFilter, setAssigneeFilter] = useState<string>('');
+  const [overdueOnly, setOverdueOnly] = useState(false);
+  const [members, setMembers] = useState<BoardMember[]>([]);
   const firstColumnRef = useRef<string | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -54,6 +60,10 @@ export function BoardView({ boardId }: Props) {
   }, [columns]);
 
   useEffect(() => {
+    boardsService.getMembers(boardId).then((data) => setMembers(data as BoardMember[])).catch(() => {});
+  }, [boardId]);
+
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement).tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
@@ -65,13 +75,13 @@ export function BoardView({ boardId }: Props) {
     return () => window.removeEventListener('keydown', onKey);
   }, [createTask]);
 
-  const filterTasks = (columnTasks: Task[]) => {
-    return columnTasks.filter((t) => {
-      const matchesSearch = !search || t.title.toLowerCase().includes(search.toLowerCase());
-      const matchesPriority = !priorityFilter || t.priority === priorityFilter;
-      return matchesSearch && matchesPriority;
-    });
-  };
+  const memberOptions = [
+    { label: 'All members', value: '' },
+    ...members.map((m) => ({
+      value: m.user_id,
+      label: m.profile?.name ?? m.profile?.email ?? m.user_id,
+    })),
+  ];
 
   const getColumnTasks = (columnId: string) =>
     tasks.filter((t) => t.column_id === columnId).sort((a, b) => a.position - b.position);
@@ -108,10 +118,25 @@ export function BoardView({ boardId }: Props) {
       setTasks(newTasks);
       updated.forEach((t) => moveTask(t.id, t.column_id, t.position));
     } else {
-      const newPosition = overTask
+      const insertAt = overTask
         ? columnTasks.findIndex((t) => t.id === overId)
         : columnTasks.length;
-      moveTask(taskId, targetColumnId, newPosition);
+
+      const sourceTasks = getColumnTasks(task.column_id)
+        .filter((t) => t.id !== taskId)
+        .map((t, i) => ({ ...t, position: i }));
+
+      const targetTasks = [
+        ...columnTasks.slice(0, insertAt),
+        { ...task, column_id: targetColumnId },
+        ...columnTasks.slice(insertAt),
+      ].map((t, i) => ({ ...t, position: i }));
+
+      const otherTasks = tasks.filter(
+        (t) => t.column_id !== task.column_id && t.column_id !== targetColumnId
+      );
+      setTasks([...otherTasks, ...sourceTasks, ...targetTasks]);
+      [...sourceTasks, ...targetTasks].forEach((t) => moveTask(t.id, t.column_id, t.position));
     }
   };
 
@@ -140,8 +165,8 @@ export function BoardView({ boardId }: Props) {
         align="center"
         style={{
           padding: '8px 16px',
-          borderBottom: '1px solid #f0f0f0',
-          backgroundColor: '#fff',
+          borderBottom: `1px solid ${token.colorBorderSecondary}`,
+          backgroundColor: token.colorBgContainer,
         }}
       >
         <Input
@@ -156,8 +181,17 @@ export function BoardView({ boardId }: Props) {
           value={priorityFilter}
           onChange={setPriorityFilter}
           options={PRIORITY_FILTER_OPTIONS}
+          style={{ width: 140 }}
+        />
+        <Select
+          value={assigneeFilter}
+          onChange={setAssigneeFilter}
+          options={memberOptions}
           style={{ width: 150 }}
         />
+        <Checkbox checked={overdueOnly} onChange={(e) => setOverdueOnly(e.target.checked)}>
+          Overdue
+        </Checkbox>
       </Flex>
 
       <Flex gap={12} style={{ padding: '16px', overflowX: 'auto', alignItems: 'flex-start', minHeight: 'calc(100vh - 152px)', WebkitOverflowScrolling: 'touch' }}>
@@ -165,7 +199,7 @@ export function BoardView({ boardId }: Props) {
           <BoardColumn
             key={col.id}
             column={col}
-            tasks={filterTasks(getColumnTasks(col.id))}
+            tasks={filterTasks(getColumnTasks(col.id), search, priorityFilter, assigneeFilter, overdueOnly)}
             onRename={renameColumn}
             onDelete={deleteColumn}
             onAddTask={createTask}

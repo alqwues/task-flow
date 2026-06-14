@@ -13,14 +13,14 @@ export function useBoards() {
     if (!user) return;
     setLoading(true);
     try {
-      const data = await boardsService.getBoards(user.id);
+      const data = await boardsService.getBoards();
       setBoards(data);
     } catch {
       message.error('Failed to load boards');
     } finally {
       setLoading(false);
     }
-  }, [user, setBoards, setLoading]);
+  }, [user, setBoards, setLoading, message]);
 
   const createBoard = useCallback(
     async (title: string) => {
@@ -33,7 +33,7 @@ export function useBoards() {
         message.error('Failed to create board');
       }
     },
-    [user, addBoard]
+    [user, addBoard, message]
   );
 
   const deleteBoard = useCallback(
@@ -46,7 +46,7 @@ export function useBoards() {
         message.error('Failed to delete board');
       }
     },
-    [removeBoard]
+    [removeBoard, message]
   );
 
   return { boards, loading, fetchBoards, createBoard, deleteBoard };

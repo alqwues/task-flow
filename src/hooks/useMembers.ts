@@ -18,7 +18,7 @@ export function useMembers(boardId: string) {
     } finally {
       setLoading(false);
     }
-  }, [boardId]);
+  }, [boardId, message]);
 
   const inviteMember = useCallback(
     async (email: string) => {
@@ -26,11 +26,11 @@ export function useMembers(boardId: string) {
         await boardsService.inviteMember(boardId, email);
         await fetchMembers();
         message.success('Member invited');
-      } catch (err: any) {
-        message.error(err.message ?? 'Failed to invite member');
+      } catch (err) {
+        message.error(err instanceof Error ? err.message : 'Failed to invite member');
       }
     },
-    [boardId, fetchMembers]
+    [boardId, fetchMembers, message]
   );
 
   const removeMember = useCallback(
@@ -43,7 +43,7 @@ export function useMembers(boardId: string) {
         message.error('Failed to remove member');
       }
     },
-    []
+    [message]
   );
 
   return { members, loading, fetchMembers, inviteMember, removeMember };

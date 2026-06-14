@@ -54,10 +54,16 @@ export function TaskCard({ task, onOpen, onDelete }: Props) {
           </Flex>
 
           <Flex align="center" gap={6}>
-            {task.assignee?.name && (
-              <Avatar size={22} style={{ backgroundColor: '#1677ff', fontSize: 11 }}>
-                {task.assignee.name[0].toUpperCase()}
-              </Avatar>
+            {task.assignee && (
+              <Tooltip title={task.assignee.name ?? task.assignee.email ?? 'Assignee'}>
+                <Avatar
+                  size={22}
+                  src={task.assignee.avatar_url ?? undefined}
+                  style={{ backgroundColor: '#1677ff', fontSize: 11 }}
+                >
+                  {!task.assignee.avatar_url && (task.assignee.name ?? task.assignee.email ?? 'U')[0].toUpperCase()}
+                </Avatar>
+              </Tooltip>
             )}
             <RiDeleteBinLine
               size={15}

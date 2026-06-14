@@ -27,7 +27,7 @@ export function ProfilePage() {
         form.setFieldsValue({ name: profile?.name ?? '' });
       });
     });
-  }, [user]);
+  }, [user, form]);
 
   const onSave = async (values: { name: string }) => {
     if (!user) return;

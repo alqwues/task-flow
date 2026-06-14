@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Typography, Button, Input, Flex, Popconfirm, Tooltip } from 'antd';
+import { Typography, Button, Input, Flex, Popconfirm, Tooltip, theme } from 'antd';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { RiAddLine, RiDeleteBinLine, RiEditLine, RiCheckLine, RiCloseLine } from 'react-icons/ri';
@@ -33,6 +33,7 @@ export function BoardColumn({
   const [newTaskTitle, setNewTaskTitle] = useState('');
 
   const { setNodeRef, isOver } = useDroppable({ id: column.id, data: { type: 'column', column } });
+  const { token } = theme.useToken();
 
   const confirmRename = () => {
     if (titleValue.trim() && titleValue !== column.title) {
@@ -59,7 +60,7 @@ export function BoardColumn({
       style={{
         width: 'min(280px, 80vw)',
         flexShrink: 0,
-        backgroundColor: isOver ? '#e6f4ff' : '#f5f5f5',
+        backgroundColor: isOver ? token.colorPrimaryBg : token.colorFillAlter,
         borderRadius: 8,
         padding: 12,
         transition: 'background-color 0.15s',

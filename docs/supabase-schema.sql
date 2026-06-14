@@ -35,6 +35,25 @@ create table if not exists tasks (
   created_at  timestamptz default now()
 );
 
+create table if not exists activity_logs (
+  id         uuid primary key default gen_random_uuid(),
+  board_id   uuid not null references boards(id) on delete cascade,
+  user_id    uuid not null references auth.users(id),
+  action     text not null,
+  meta       jsonb default '{}',
+  created_at timestamptz default now()
+);
+
+create table if not exists task_attachments (
+  id          uuid primary key default gen_random_uuid(),
+  task_id     uuid not null references tasks(id) on delete cascade,
+  name        text not null,
+  url         text not null,
+  size        bigint default 0,
+  uploaded_by uuid references auth.users(id),
+  created_at  timestamptz default now()
+);
+
 create table if not exists comments (
   id         uuid primary key default gen_random_uuid(),
   task_id    uuid not null references tasks(id) on delete cascade,
@@ -67,12 +86,14 @@ create trigger on_auth_user_created
   for each row execute procedure handle_new_user();
 
 -- Enable RLS
-alter table boards        enable row level security;
-alter table board_members enable row level security;
-alter table columns       enable row level security;
-alter table tasks         enable row level security;
-alter table comments      enable row level security;
-alter table profiles      enable row level security;
+alter table boards          enable row level security;
+alter table board_members   enable row level security;
+alter table columns         enable row level security;
+alter table tasks           enable row level security;
+alter table comments        enable row level security;
+alter table profiles        enable row level security;
+alter table activity_logs   enable row level security;
+alter table task_attachments enable row level security;
 
 -- Drop all existing policies to start clean
 drop policy if exists "view own boards"        on boards;
@@ -102,13 +123,21 @@ create policy "view board members"
     OR board_id in (select board_id from board_members where user_id = auth.uid())
   );
 
+-- Only board owner can add members; also allow self-insert (for createBoard trigger)
 create policy "insert board member"
   on board_members for insert
-  with check (true);
+  with check (
+    user_id = auth.uid()
+    OR board_id in (select id from boards where owner_id = auth.uid())
+  );
 
+-- Owner can remove any member; member can remove themselves (leave board)
 create policy "delete board member"
   on board_members for delete
-  using (user_id = auth.uid());
+  using (
+    user_id = auth.uid()
+    OR board_id in (select id from boards where owner_id = auth.uid())
+  );
 
 -- boards: queries board_members which now has a non-recursive policy
 create policy "view own boards"
@@ -176,9 +205,48 @@ create policy "view profiles"     on profiles for select using (true);
 create policy "insert profile"    on profiles for insert with check (id = auth.uid());
 create policy "edit own profile"  on profiles for update using (id = auth.uid());
 
--- Storage: avatars bucket
--- Run in Supabase Dashboard → Storage → New bucket: name="avatars", public=true
--- Then add these policies:
+-- activity_logs: members of the board can read; authenticated users can insert for their own board
+drop policy if exists "view activity logs" on activity_logs;
+drop policy if exists "insert activity log" on activity_logs;
+
+create policy "view activity logs"
+  on activity_logs for select
+  using (
+    board_id in (select board_id from board_members where user_id = auth.uid())
+    OR board_id in (select id from boards where owner_id = auth.uid())
+  );
+
+create policy "insert activity log"
+  on activity_logs for insert
+  with check (
+    user_id = auth.uid()
+    AND (
+      board_id in (select board_id from board_members where user_id = auth.uid())
+      OR board_id in (select id from boards where owner_id = auth.uid())
+    )
+  );
+
+-- task_attachments
+drop policy if exists "view task attachments" on task_attachments;
+drop policy if exists "manage task attachments" on task_attachments;
+
+create policy "view task attachments"
+  on task_attachments for select
+  using (
+    task_id in (
+      select t.id from tasks t
+      join columns c on c.id = t.column_id
+      join board_members bm on bm.board_id = c.board_id
+      where bm.user_id = auth.uid()
+    )
+  );
+
+create policy "manage task attachments"
+  on task_attachments for all
+  using (uploaded_by = auth.uid())
+  with check (uploaded_by = auth.uid());
+
+-- Storage: avatars + task-files buckets
 insert into storage.buckets (id, name, public) values ('avatars', 'avatars', true)
   on conflict (id) do nothing;
 
@@ -193,3 +261,19 @@ create policy "Avatar update"
 create policy "Avatar read"
   on storage.objects for select
   using (bucket_id = 'avatars');
+
+-- task-files bucket (10 MB max enforced in app)
+insert into storage.buckets (id, name, public) values ('task-files', 'task-files', true)
+  on conflict (id) do nothing;
+
+create policy "Task file upload"
+  on storage.objects for insert
+  with check (bucket_id = 'task-files' and auth.uid() is not null);
+
+create policy "Task file delete"
+  on storage.objects for delete
+  using (bucket_id = 'task-files' and auth.uid() is not null);
+
+create policy "Task file read"
+  on storage.objects for select
+  using (bucket_id = 'task-files');

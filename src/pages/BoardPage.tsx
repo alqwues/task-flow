@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Typography, Button, Flex } from 'antd';
-import { RiArrowLeftLine, RiTeamLine } from 'react-icons/ri';
+import { Typography, Button, Flex, theme } from 'antd';
+import { RiArrowLeftLine, RiHistoryLine, RiTeamLine } from 'react-icons/ri';
 import { BoardView } from '../components/board/BoardView';
 import { MembersPanel } from '../components/board/MembersPanel';
+import { ActivityPanel } from '../components/board/ActivityPanel';
 import { useBoardStore } from '../store/boardStore';
 import { supabase } from '../services/supabase';
 
@@ -13,7 +14,9 @@ export function BoardPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { currentBoard, setCurrentBoard } = useBoardStore();
+  const { token } = theme.useToken();
   const [membersOpen, setMembersOpen] = useState(false);
+  const [activityOpen, setActivityOpen] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -36,8 +39,8 @@ export function BoardPage() {
         justify="space-between"
         style={{
           padding: '10px 16px',
-          borderBottom: '1px solid #f0f0f0',
-          backgroundColor: '#fff',
+          borderBottom: `1px solid ${token.colorBorderSecondary}`,
+          backgroundColor: token.colorBgContainer,
           minHeight: 48,
         }}
       >
@@ -62,18 +65,20 @@ export function BoardPage() {
           </Text>
         </Flex>
 
-        <Button
-          size="small"
-          icon={<RiTeamLine />}
-          onClick={() => setMembersOpen(true)}
-        >
-          Members
-        </Button>
+        <Flex gap={8}>
+          <Button size="small" icon={<RiHistoryLine />} onClick={() => setActivityOpen(true)}>
+            Activity
+          </Button>
+          <Button size="small" icon={<RiTeamLine />} onClick={() => setMembersOpen(true)}>
+            Members
+          </Button>
+        </Flex>
       </Flex>
 
       <BoardView boardId={id} />
 
       <MembersPanel open={membersOpen} onClose={() => setMembersOpen(false)} />
+      {id && <ActivityPanel boardId={id} open={activityOpen} onClose={() => setActivityOpen(false)} />}
     </div>
   );
 }

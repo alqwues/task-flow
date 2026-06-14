@@ -15,11 +15,11 @@ import {
 } from 'antd';
 import dayjs from 'dayjs';
 import { RiDeleteBinLine, RiSendPlaneLine, RiUserLine } from 'react-icons/ri';
-import { PriorityTag } from '../shared/PriorityTag';
 import { useTaskDetail } from '../../hooks/useTaskDetail';
 import { useAuthStore } from '../../store/authStore';
 import { useBoardStore } from '../../store/boardStore';
 import { boardsService } from '../../services/boards';
+import { TaskAttachments } from './TaskAttachments';
 import type { Priority, BoardMember } from '../../types';
 
 const { Text, Paragraph } = Typography;
@@ -129,6 +129,13 @@ export function TaskModal() {
 
       <Divider />
 
+      <Text strong>Attachments</Text>
+      <div style={{ marginTop: 8, marginBottom: 16 }}>
+        {activeTask && <TaskAttachments taskId={activeTask.id} />}
+      </div>
+
+      <Divider />
+
       <Text strong>Comments</Text>
 
       {commentsLoading ? (
@@ -137,8 +144,12 @@ export function TaskModal() {
         <div style={{ marginTop: 12 }}>
           {comments.map((c) => (
             <Flex key={c.id} gap={10} style={{ marginBottom: 12 }} align="flex-start">
-              <Avatar size={28} style={{ backgroundColor: '#1677ff', flexShrink: 0, fontSize: 12 }}>
-                {(c.profile?.name ?? 'U')[0].toUpperCase()}
+              <Avatar
+                size={28}
+                src={c.profile?.avatar_url ?? undefined}
+                style={{ backgroundColor: '#1677ff', flexShrink: 0, fontSize: 12 }}
+              >
+                {!c.profile?.avatar_url && (c.profile?.name ?? 'U')[0].toUpperCase()}
               </Avatar>
               <div style={{ flex: 1 }}>
                 <Flex justify="space-between" align="center">

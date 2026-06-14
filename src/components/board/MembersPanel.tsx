@@ -22,7 +22,7 @@ export function MembersPanel({ open, onClose }: Props) {
 
   useEffect(() => {
     if (open && boardId) fetchMembers();
-  }, [open, boardId]);
+  }, [open, boardId, fetchMembers]);
 
   const handleInvite = async () => {
     if (!email.trim()) return;

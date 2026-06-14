@@ -4,7 +4,7 @@ import type { Board, Column } from '../types';
 const DEFAULT_COLUMNS = ['To Do', 'In Progress', 'Done'];
 
 export const boardsService = {
-  async getBoards(userId: string): Promise<Board[]> {
+  async getBoards(): Promise<Board[]> {
     const { data, error } = await supabase
       .from('boards')
       .select('*')
